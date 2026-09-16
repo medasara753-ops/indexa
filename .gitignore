@@ -1,0 +1,8 @@
+node_modules/
+data/indexa.db
+data/indexa.db-journal
+data/indexa.db-shm
+data/indexa.db-wal
+.env
+.DS_Store
+Thumbs.db
