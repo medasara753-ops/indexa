@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { getDb, ensureSeed, migrate, prepare, lastId, chunkStmts, BASE_URL } from './lib/db.js';
 import { parseCsv, findVariables, generatePages, rebuildLinks, relatedFor } from './lib/engine.js';
 import { landing, generateView, publicPage, notFound } from './lib/views.js';
+import { ogImagePNG } from './lib/ogimage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -96,6 +97,20 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, fs.readFileSync(file), { 'Content-Type': MIME[path.extname(file)], 'Cache-Control': 'public, max-age=3600' });
       }
       return send(res, 404, 'not found');
+    }
+
+    /* ------------------- og images (PNG 1200×630) ------------------- */
+    const ogHome = urlPath === '/og/home.png';
+    const ogPage = urlPath.match(/^\/og\/(\d+)\.png$/);
+    if (ogHome || ogPage) {
+      let title = 'INDEXA\nPROGRAMMATIC SEO', ppath = '/';
+      if (ogPage) {
+        const p = await prepare(db, 'SELECT h1, title, url FROM generated_pages WHERE id = ?').get(Number(ogPage[1]));
+        if (!p) return send(res, 404, 'not found');
+        title = p.h1 || p.title;
+        ppath = p.url;
+      }
+      return send(res, 200, ogImagePNG({ title, path: ppath }), { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
     }
 
     /* --------------------------- sitemap ---------------------------- */
