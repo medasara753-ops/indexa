@@ -42,6 +42,7 @@ const MIME = {
   '.jpg': 'image/jpeg',
   '.webp': 'image/webp',
   '.woff2': 'font/woff2',
+  '.mp4': 'video/mp4',
   '.ico': 'image/x-icon',
   '.txt': 'text/plain; charset=utf-8',
   '.xml': 'application/xml; charset=utf-8',
@@ -91,7 +92,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     /* ------------------- static à la racine (css/js) ---------------- */
-    if (urlPath.length > 1 && /^\/(styles\.css|app\.js)$/.test(urlPath)) {
+    if (urlPath.length > 1 && /^\/(styles\.css|app\.js|bg\.js)$/.test(urlPath)) {
       const file = path.join(PUBLIC_DIR, urlPath.slice(1));
       if (fs.existsSync(file)) {
         return send(res, 200, fs.readFileSync(file), { 'Content-Type': MIME[path.extname(file)], 'Cache-Control': 'public, max-age=3600' });
