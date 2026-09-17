@@ -89,6 +89,15 @@ const server = http.createServer(async (req, res) => {
       return send(res, 404, 'not found');
     }
 
+    /* ------------------- static à la racine (css/js) ---------------- */
+    if (urlPath.length > 1 && /^\/(styles\.css|app\.js)$/.test(urlPath)) {
+      const file = path.join(PUBLIC_DIR, urlPath.slice(1));
+      if (fs.existsSync(file)) {
+        return send(res, 200, fs.readFileSync(file), { 'Content-Type': MIME[path.extname(file)], 'Cache-Control': 'public, max-age=3600' });
+      }
+      return send(res, 404, 'not found');
+    }
+
     /* --------------------------- sitemap ---------------------------- */
     if (urlPath === '/sitemap.xml') {
       const pages = (await db.execute('SELECT url FROM generated_pages ORDER BY id')).rows;
