@@ -1,16 +1,16 @@
 /* ------------------------------------------------------------------ */
-/*  INDEXA — warm dark editorial design system                         */
-/*  bg #100904 · text #ffedd7 · surface #382416 · border #40372e       */
-/*  secondary #6c5f51 · accent #dc5000 (rare)                          */
+/*  INDEXA — Superpower light design system                            */
+/*  bg #ffffff · text #18181b · surface #f4f4f5 · border #e4e4e7       */
+/*  secondary #71717a · accent #fc5f2b (rationed, actions only)        */
 /* ------------------------------------------------------------------ */
 
 :root {
-  --bg: #100904;
-  --ink: #ffedd7;
-  --surface: #382416;
-  --line: #40372e;
-  --dim: #6c5f51;
-  --accent: #dc5000;
+  --bg: #ffffff;
+  --ink: #18181b;
+  --surface: #f4f4f5;
+  --line: #e4e4e7;
+  --dim: #71717a;
+  --accent: #fc5f2b;
 
   --font: "Neue Haas Grotesk", "Helvetica Neue", Inter, "Halyard Display", "Söhne", Arial, sans-serif;
   --maxw: 1280px;
@@ -184,6 +184,7 @@ body.mopen { overflow: hidden; }
 .btn {
   display: inline-block;
   border: 1px solid var(--line);
+  border-radius: 9999px;
   padding: 15px 30px;
   font-size: 11px;
   letter-spacing: 0.22em;
@@ -470,7 +471,7 @@ body.mopen { overflow: hidden; }
   border-bottom: 1px solid var(--line);
   transition: padding-left 0.5s ease, background 0.5s ease;
 }
-.frag:hover { padding-left: 18px; background: rgba(56, 36, 22, 0.25); }
+.frag:hover { padding-left: 18px; background: rgba(24, 24, 27, 0.04); }
 .frag .fn { font-size: 10px; color: var(--accent); letter-spacing: 0.2em; }
 .frag > span:nth-child(2) {
   font-size: clamp(17px, 2vw, 24px);
@@ -678,16 +679,17 @@ body.mopen { overflow: hidden; }
   gap: 20px;
 }
 .genbtn {
-  background: var(--ink);
-  color: var(--bg);
-  border: 1px solid var(--ink);
+  background: var(--accent);
+  color: #ffffff;
+  border: 1px solid var(--accent);
+  border-radius: 9999px;
   padding: 18px 44px;
   font-size: 12px;
   letter-spacing: 0.26em;
   text-transform: uppercase;
   transition: background 0.35s, color 0.35s;
 }
-.genbtn:hover { background: transparent; color: var(--ink); }
+.genbtn:hover { background: var(--ink); border-color: var(--ink); }
 .genbtn:disabled { opacity: 0.4; cursor: wait; }
 
 .gcount { font-size: clamp(26px, 3.4vw, 44px); font-weight: 500; letter-spacing: 0.02em; }

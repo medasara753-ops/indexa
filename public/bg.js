@@ -67,7 +67,7 @@
     for (const c of cols) {
       c.y += c.speed * dt;
       if (c.y > H + 40) { c.y = -30; c.glyph = WORDS[(Math.random() * WORDS.length) | 0]; }
-      ctx.fillStyle = 'rgba(108, 95, 81, 0.16)';
+      ctx.fillStyle = 'rgba(113, 113, 122, 0.18)';
       ctx.fillText(c.glyph, c.x, c.y);
     }
 
@@ -80,7 +80,7 @@
       ctx.translate(d.x, d.y);
       ctx.rotate(d.rot);
       ctx.font = `500 ${d.size}px "Neue Haas Grotesk", Arial, sans-serif`;
-      ctx.fillStyle = 'rgba(56, 36, 22, 0.20)';
+      ctx.fillStyle = 'rgba(24, 24, 27, 0.06)';
       ctx.fillText(d.glyph, 0, 0);
       ctx.restore();
     }
