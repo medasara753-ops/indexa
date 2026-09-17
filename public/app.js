@@ -68,6 +68,21 @@
     io2.observe(flow);
   });
 
+  /* ---------------- cycle videos: lazy-src au premier scroll ---------- */
+  const lazyVids = $$('video[data-src]');
+  if (lazyVids.length) {
+    const vio = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          const v = e.target;
+          if (!v.src) { v.src = v.dataset.src; v.play().catch(() => {}); }
+          vio.unobserve(v);
+        }
+      });
+    }, { threshold: 0.25 });
+    lazyVids.forEach(v => vio.observe(v));
+  }
+
   /* ---------------------- generate: live URL preview ------------------- */
   const urlInput = $('#turl');
   const csvtext = $('#csvtext');

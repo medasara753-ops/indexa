@@ -201,6 +201,106 @@ body.mopen { overflow: hidden; }
 .btn.ghost { color: var(--dim); }
 .btn.ghost:hover { color: var(--ink); }
 
+/* hero plein écran : vidéo plein espace + scrim pour la lisibilité */
+.bgvideo.full { opacity: 0.55; }
+.hero-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.35) 45%, rgba(255,255,255,0) 78%, #ffffff 96%);
+}
+.hero-inner.dark, .hero .kicker, .hero-inner.dark .sub { position: relative; z-index: 1; }
+.hero-inner.dark h1, .hero-inner.dark .sub { color: #ffffff; }
+.hero-inner.dark .kicker { color: var(--accent); }
+.hero .btns .btn { border-color: rgba(255,255,255,0.35); color: #ffffff; }
+.hero .btns .btn:hover { border-color: #ffffff; }
+.hero .btns .btn.ghost { color: rgba(255,255,255,0.65); }
+.hero .btns .btn.ghost:hover { color: #ffffff; }
+.hero .scrollhint { color: rgba(255,255,255,0.55); }
+.hero .scrollhint span { background: rgba(255,255,255,0.25); }
+.hero .scrollhint span::after { background: #ffffff; }
+
+/* ------------------------------------------------- cycle section */
+.cycle {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(96px, 14vh, 160px) 0;
+}
+.cycle .lead { color: var(--dim); }
+.cycle-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: clamp(16px, 2vw, 28px);
+  margin-top: clamp(40px, 6vh, 72px);
+}
+.cyc {
+  position: relative;
+  border-radius: 15px;
+  overflow: hidden;
+  aspect-ratio: 4 / 5;
+  background: #000000;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  box-shadow: 0 2px 2px rgba(0,0,0,0.05);
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.cyc:hover { transform: translateY(-6px); }
+.cyc video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: brightness(0.85);
+}
+.cyc figcaption, .cyc .cyccta {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 22px 22px 0;
+}
+.cyc figcaption { flex-direction: column; gap: 8px; padding-bottom: 22px; }
+.cycnum { font-size: 11px; color: var(--accent); letter-spacing: 0.2em; }
+.cyct {
+  font-size: 22px;
+  font-weight: 500;
+  color: #ffffff;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+}
+.cycd { color: rgba(255,255,255,0.72); font-size: 14.5px; line-height: 1.4; padding: 0 22px 22px; position: relative; z-index: 1; }
+a.cyc { text-decoration: none; background: linear-gradient(180deg, #26262b 0%, #000000 100%); justify-content: center; gap: 12px; }
+a.cyc .cyccta { flex-direction: column; gap: 8px; padding: 0 22px; }
+a.cyc .cycd { padding: 0 22px; }
+.cycgo {
+  display: inline-block;
+  margin: 0 22px 22px;
+  padding: 12px 22px;
+  border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 9999px;
+  color: #ffffff;
+  font-size: 10.5px;
+  letter-spacing: 0.22em;
+  width: fit-content;
+  transition: background 0.35s, border-color 0.35s;
+}
+a.cyc:hover .cycgo { background: var(--accent); border-color: var(--accent); }
+.cyc::after {
+  content: "";
+  position: absolute;
+  inset: 40% 0 0;
+  background: linear-gradient(180deg, transparent, rgba(0,0,0,0.75));
+  pointer-events: none;
+}
+a.cyc::after { inset: 0; background: none; }
+
 /* hero data-stage */
 .stage {
   margin-top: clamp(56px, 9vh, 110px);
