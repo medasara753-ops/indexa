@@ -107,6 +107,8 @@
   const pfill = $('#pfill');
   const gdone = $('#gdone');
   const plist = $('#plist');
+  const dsel = $('#dsel');
+  const tsel = $('#tsel');
 
   const toast = msg => { if (gdone) gdone.textContent = msg; };
 
@@ -117,22 +119,32 @@
       if (plist) plist.innerHTML = '';
 
       try {
-        /* 1 — import CSV into the database */
-        const csv = csvtext ? csvtext.value : '';
-        if (!csv.trim()) throw new Error('Paste or import a CSV first.');
-        toast('IMPORTING DATASET…');
+        /* 1 — resolve the dataset: existing select wins over fresh CSV */
+        let datasetId = dsel && dsel.value ? Number(dsel.value) : 0;
+        let total = 0;
 
-        const impRes = await fetch('/api/import', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ csv })
-        });
-        const imp = await impRes.json();
-        if (!imp.ok) throw new Error(imp.error || 'Import failed');
+        if (datasetId) {
+          total = Number(dsel.selectedOptions[0].dataset.rows) || 0;
+          toast('USING EXISTING DATASET…');
+        } else {
+          const csv = csvtext ? csvtext.value : '';
+          if (!csv.trim()) throw new Error('Pick an existing dataset or paste a CSV first.');
+          toast('IMPORTING DATASET…');
+
+          const impRes = await fetch('/api/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ csv })
+          });
+          const imp = await impRes.json();
+          if (!imp.ok) throw new Error(imp.error || 'Import failed');
+          datasetId = imp.datasetId;
+          total = imp.rows;
+        }
+        if (!total) throw new Error('Selected dataset has no rows.');
 
         /* 2 — generate pages from template + dataset */
         toast('GENERATING…');
-        const total = imp.rows;
         const step = Math.max(1, Math.round(total / 20));
         let shown = 0;
         const tick = setInterval(() => {
@@ -141,17 +153,22 @@
           if (pfill) pfill.style.width = `${(shown / total) * 100}%`;
         }, 60);
 
+        const usePreset = tsel && tsel.value;
         const genRes = await fetch('/api/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            datasetId: imp.datasetId,
+          body: JSON.stringify(usePreset ? {
+            datasetId,
+            templateId: Number(tsel.value),
+            limit: total
+          } : {
+            datasetId,
             title: $('#ttitle').value,
             meta: $('#tmeta').value,
             h1: $('#th1').value,
             content: $('#tcontent').value,
             urlPattern: $('#turl').value,
-            limit: imp.rows
+            limit: total
           })
         });
 

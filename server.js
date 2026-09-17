@@ -1,12 +1,13 @@
 /* ------------------------------------------------------------------ */
-/*  INDEXA SERVER — http, api, sitemap, robots — zero dependencies     */
+/*  INDEXA SERVER — http, api, sitemap, robots — @libsql/client        */
+/*  (Turso distant ou SQLite local — voir lib/db.js)                   */
 /* ------------------------------------------------------------------ */
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getDb, ensureSeed, BASE_URL } from './lib/db.js';
-import { parseCsv, slugify, findVariables, generatePages, rebuildLinks, relatedFor } from './lib/engine.js';
+import { getDb, ensureSeed, migrate, prepare, lastId, chunkStmts, BASE_URL } from './lib/db.js';
+import { parseCsv, findVariables, generatePages, rebuildLinks, relatedFor } from './lib/engine.js';
 import { landing, generateView, publicPage, notFound } from './lib/views.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -14,18 +15,22 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const PORT = Number(process.env.PORT || 3000);
 
 const db = getDb();
-ensureSeed(db);
+await migrate(db);
+await ensureSeed(db);
 
 /* First boot: generate the seed pages so public URLs exist immediately */
-if (!db.prepare('SELECT COUNT(*) c FROM generated_pages').get().c) {
-  const ds = db.prepare('SELECT id FROM datasets ORDER BY id LIMIT 1').get();
-  const tpl = db.prepare('SELECT id FROM templates ORDER BY id LIMIT 1').get();
-  if (ds && tpl) {
-    const seeded = generatePages(db, { datasetId: ds.id, templateId: tpl.id, limit: 500, baseUrl: BASE_URL });
-    console.log(`INDEXA — seeded ${seeded.generated} public pages from the default dataset.`);
+{
+  const cnt = await prepare(db, 'SELECT COUNT(*) c FROM generated_pages').get();
+  if (!cnt.c) {
+    const ds = await prepare(db, 'SELECT id FROM datasets ORDER BY id LIMIT 1').get();
+    const tpl = await prepare(db, 'SELECT id FROM templates ORDER BY id LIMIT 1').get();
+    if (ds && tpl) {
+      const seeded = await generatePages(db, { datasetId: ds.id, templateId: tpl.id, limit: 500, baseUrl: BASE_URL });
+      console.log(`INDEXA — seeded ${seeded.generated} public pages from the default dataset.`);
+    }
   }
 }
-rebuildLinks(db, BASE_URL);
+await rebuildLinks(db, BASE_URL);
 
 /* ---------------------------- helpers ------------------------------ */
 const MIME = {
@@ -58,12 +63,12 @@ function readBody(req) {
   });
 }
 
-function collectStats() {
-  const q = sql => db.prepare(sql).get().c;
+async function collectStats() {
+  const q = async sql => Number((await db.execute(sql)).rows[0].c);
   return {
-    pages: q('SELECT COUNT(*) c FROM generated_pages'),
-    datasets: q('SELECT COUNT(*) c FROM datasets'),
-    generations: q('SELECT COUNT(*) c FROM generation_events')
+    pages: await q('SELECT COUNT(*) c FROM generated_pages'),
+    datasets: await q('SELECT COUNT(*) c FROM datasets'),
+    generations: await q('SELECT COUNT(*) c FROM generation_events')
   };
 }
 
@@ -86,7 +91,7 @@ const server = http.createServer(async (req, res) => {
 
     /* --------------------------- sitemap ---------------------------- */
     if (urlPath === '/sitemap.xml') {
-      const pages = db.prepare('SELECT url FROM generated_pages ORDER BY id').all();
+      const pages = (await db.execute('SELECT url FROM generated_pages ORDER BY id')).rows;
       const urls = ['/', '/generate', ...pages.map(p => p.url)];
       const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -107,7 +112,7 @@ ${urls.map(u => `  <url><loc>${BASE_URL}${u}</loc></url>`).join('\n')}
       const templateId = Number(body.templateId || 0);
       const limit = Math.min(Math.max(Number(body.limit) || 100, 1), 500);
 
-      const dataset = db.prepare('SELECT * FROM datasets WHERE id = ?').get(datasetId);
+      const dataset = (await db.execute({ sql: 'SELECT * FROM datasets WHERE id = ?', args: [datasetId] })).rows[0];
       if (!dataset) return json(res, 400, { ok: false, error: 'Import a dataset first.' });
 
       let tplId = templateId;
@@ -119,14 +124,16 @@ ${urls.map(u => `  <url><loc>${BASE_URL}${u}</loc></url>`).join('\n')}
         const content = String(body.content || '').trim();
         const urlPattern = String(body.urlPattern || '').trim();
         if (!title || !h1 || !urlPattern) return json(res, 400, { ok: false, error: 'Title, H1 and URL pattern are required.' });
-        const r = db.prepare('INSERT INTO templates (name, url_pattern, title, meta_description, h1, content) VALUES (?, ?, ?, ?, ?, ?)')
-          .run(`FORM — ${new Date().toISOString().slice(0, 10)} ${String(body.h1 || 'template').slice(0, 24)}`, urlPattern, title, meta, h1, content);
-        tplId = Number(r.lastInsertRowid);
+        const rs = await db.execute({
+          sql: 'INSERT INTO templates (name, url_pattern, title, meta_description, h1, content) VALUES (?, ?, ?, ?, ?, ?)',
+          args: [`FORM — ${new Date().toISOString().slice(0, 10)} ${String(body.h1 || 'template').slice(0, 24)}`, urlPattern, title, meta, h1, content]
+        });
+        tplId = rs.lastInsertRowid != null ? Number(rs.lastInsertRowid) : tplId;
         // Rename with the id so the list stays readable
-        db.prepare('UPDATE templates SET name = ? WHERE id = ?').run(`FORM — TEMPLATE #${tplId}`, tplId);
+        await db.execute({ sql: 'UPDATE templates SET name = ? WHERE id = ?', args: [`FORM — TEMPLATE #${tplId}`, tplId] });
       }
 
-      const result = generatePages(db, { datasetId, templateId: tplId, limit, baseUrl: BASE_URL });
+      const result = await generatePages(db, { datasetId, templateId: tplId, limit, baseUrl: BASE_URL });
       if (!result.ok) return json(res, 400, result);
       return json(res, 200, { ok: true, generated: result.generated, duration_ms: result.duration_ms, pages: result.pages });
     }
@@ -137,29 +144,24 @@ ${urls.map(u => `  <url><loc>${BASE_URL}${u}</loc></url>`).join('\n')}
       const parsed = parseCsv(csv);
       if (!parsed.length) return json(res, 400, { ok: false, error: 'No valid rows found in CSV.' });
       const name = String(body.name || `IMPORT — ${new Date().toISOString().slice(0, 10)}`).slice(0, 120);
-      const r = db.prepare('INSERT INTO datasets (name, source) VALUES (?, ?)').run(name, 'csv');
-      const datasetId = Number(r.lastInsertRowid);
-      const ins = db.prepare('INSERT INTO data_rows (dataset_id, position, data) VALUES (?, ?, ?)');
-      db.exec('BEGIN');
-      try {
-        parsed.forEach((row, i) => ins.run(datasetId, i, JSON.stringify(row)));
-        db.exec('COMMIT');
-      } catch (e) {
-        db.exec('ROLLBACK');
-        throw e;
+      const ds = await db.execute({ sql: 'INSERT INTO datasets (name, source) VALUES (?, ?)', args: [name, 'csv'] });
+      const datasetId = ds.lastInsertRowid != null ? Number(ds.lastInsertRowid) : await lastId(db);
+      const ins = 'INSERT INTO data_rows (dataset_id, position, data) VALUES (?, ?, ?)';
+      for (const chunk of chunkStmts(parsed.map((row, i) => ({ sql: ins, args: [datasetId, i, JSON.stringify(row)] })))) {
+        await db.batch(chunk, 'write');
       }
       return json(res, 200, { ok: true, datasetId, rows: parsed.length, variables: findVariables(parsed) });
     }
 
     /* ------------------------- generate page ------------------------ */
     if (urlPath === '/generate') {
-      const datasets = db.prepare(`
+      const datasets = (await db.execute(`
         SELECT d.*, (SELECT COUNT(*) FROM data_rows r WHERE r.dataset_id = d.id) AS rows
-        FROM datasets d ORDER BY d.id DESC`).all();
-      const templates = db.prepare('SELECT id, name, url_pattern FROM templates ORDER BY id DESC').all();
+        FROM datasets d ORDER BY d.id DESC`)).rows;
+      const templates = (await db.execute('SELECT id, name, url_pattern FROM templates ORDER BY id DESC')).rows;
       let variables = ['city', 'service', 'description'];
-      const first = db.prepare(`
-        SELECT data FROM data_rows WHERE dataset_id = (SELECT MAX(id) FROM datasets) LIMIT 1`).get();
+      const first = (await db.execute(`
+        SELECT data FROM data_rows WHERE dataset_id = (SELECT MAX(id) FROM datasets) LIMIT 1`)).rows[0];
       if (first) {
         try { const v = findVariables([JSON.parse(first.data)]); if (v.length) variables = v; } catch {}
       }
@@ -168,30 +170,33 @@ ${urls.map(u => `  <url><loc>${BASE_URL}${u}</loc></url>`).join('\n')}
 
     /* --------------------------- landing ---------------------------- */
     if (urlPath === '/' || urlPath === '') {
-      return send(res, 200, landing({ baseUrl: BASE_URL, stats: collectStats() }));
+      return send(res, 200, landing({ baseUrl: BASE_URL, stats: await collectStats() }));
     }
 
     /* ------------------------ public pages -------------------------- */
-    const page = db.prepare('SELECT * FROM generated_pages WHERE url = ?').get(urlPath);
+    const page = (await db.execute({
+      sql: `SELECT p.*, m.canonical, m.structured_data
+            FROM generated_pages p
+            LEFT JOIN seo_metadata m ON m.page_id = p.id
+            WHERE p.url = ?`,
+      args: [urlPath]
+    })).rows[0];
     if (page) {
       const faq = JSON.parse(page.faq || '[]');
-      const related = relatedFor(db, page, BASE_URL, 3);
+      const related = await relatedFor(db, page, BASE_URL, 3);
       const segs = urlPath.split('/').filter(Boolean);
       const crumbs = [{ name: 'INDEXA', url: '/' }];
       segs.forEach((s, i) => {
         const isLast = i === segs.length - 1;
         const upTo = '/' + segs.slice(0, i + 1).join('/');
         crumbs.push(isLast ? { name: s.replace(/-/g, ' ').toUpperCase() } : { name: s.replace(/-/g, ' ').toUpperCase(), url: upTo });
-        if (!isLast && i === 0) {
-          // nothing special — kept simple and predictable
-        }
       });
-      const total = db.prepare('SELECT COUNT(*) c FROM generated_pages').get().c;
+      const total = Number((await db.execute('SELECT COUNT(*) c FROM generated_pages')).rows[0].c);
       return send(res, 200, publicPage({ baseUrl: BASE_URL, page, faq, related, crumbs, total }));
     }
 
     /* ----------------------------- 404 ------------------------------ */
-    const samples = db.prepare('SELECT url, h1 FROM generated_pages ORDER BY id DESC LIMIT 4').all();
+    const samples = (await db.execute('SELECT url, h1 FROM generated_pages ORDER BY id DESC LIMIT 4')).rows;
     return send(res, 404, notFound({ baseUrl: BASE_URL, samples }));
 
   } catch (err) {
@@ -201,7 +206,8 @@ ${urls.map(u => `  <url><loc>${BASE_URL}${u}</loc></url>`).join('\n')}
 });
 
 server.listen(PORT, () => {
-  const stats = collectStats();
   console.log(`INDEXA — live at ${BASE_URL} (port ${PORT})`);
-  console.log(`  pages: ${stats.pages} | datasets: ${stats.datasets} | runs: ${stats.generations}`);
+  collectStats().then(s => {
+    console.log(`  pages: ${s.pages} | datasets: ${s.datasets} | runs: ${s.generations}`);
+  });
 });

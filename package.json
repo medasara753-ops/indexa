@@ -1,15 +1,18 @@
 {
   "name": "indexa",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "INDEXA — PROGRAMMATIC SEO PAGE GENERATOR. Turns one dataset into thousands of useful pages.",
   "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --env-file-if-exists=.env --watch server.js"
   },
   "engines": {
     "node": ">=22.5.0"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.15.0"
   },
   "license": "MIT",
   "private": true
