@@ -68,6 +68,19 @@
     io2.observe(flow);
   });
 
+  /* ------- carrousel hero : jouer seulement les vidéos visibles ------- */
+  const stripVids = $$('.herostrip video');
+  if (stripVids.length && 'IntersectionObserver' in window) {
+    const vio2 = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        const v = e.target;
+        if (e.isIntersecting) v.play().catch(() => {});
+        else v.pause();
+      });
+    }, { threshold: 0.1 });
+    stripVids.forEach(v => vio2.observe(v));
+  }
+
   /* ---------------- cycle videos: lazy-src au premier scroll ---------- */
   const lazyVids = $$('video[data-src]');
   if (lazyVids.length) {
