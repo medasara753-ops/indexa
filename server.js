@@ -228,7 +228,7 @@ ${urls.map(u => `  <url><loc>${BASE_URL}${u}</loc></url>`).join('\n')}
         crumbs.push(isLast ? { name: s.replace(/-/g, ' ').toUpperCase() } : { name: s.replace(/-/g, ' ').toUpperCase(), url: upTo });
       });
       const total = Number((await db.execute('SELECT COUNT(*) c FROM generated_pages')).rows[0].c);
-      return send(res, 200, publicPage({ baseUrl: BASE_URL, page, faq, related, crumbs, total, views }));
+      return send(res, 200, publicPage({ baseUrl: BASE_URL, page, faq, related, crumbs, total, views, whatsapp: process.env.INDEXA_WHATSAPP || '' }));
     }
 
     /* ----------------------------- 404 ------------------------------ */

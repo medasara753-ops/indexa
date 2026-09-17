@@ -783,7 +783,29 @@ body.mopen { overflow: hidden; }
 .ra:hover span:first-child { color: var(--accent); }
 
 .nf { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; padding-top: 0; }
-.nf .btns { margin: 30px 0 60px; }
+
+/* ------------------------------------------------------ whatsapp */
+.wafab {
+  position: fixed;
+  right: clamp(16px, 3vw, 36px);
+  bottom: clamp(16px, 3vw, 36px);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #25d366;
+  color: #08321a;
+  padding: 13px 22px 13px 18px;
+  border-radius: 999px;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  font-weight: 600;
+  box-shadow: 0 10px 30px rgba(37, 211, 102, 0.35);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.wafab:hover { transform: translateY(-2px); box-shadow: 0 14px 34px rgba(37, 211, 102, 0.5); }
+.wafab svg { display: block; }
+@media (max-width: 760px) { .wafab span { display: none; } .wafab { padding: 14px; } }  .nf .btns { margin: 30px 0 60px; }
 .nf-samples { border-top: 1px dashed var(--line); padding-top: 30px; max-width: 640px; }
 .nf-samples .publabel { margin-bottom: 16px; }
 
