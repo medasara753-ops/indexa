@@ -208,6 +208,18 @@ ${urls.map(u => `  <url><loc>${BASE_URL}${u}</loc></url>`).join('\n')}
     if (page) {
       const faq = JSON.parse(page.faq || '[]');
       const related = await relatedFor(db, page, BASE_URL, 3);
+      /* compteur de vues — incrément non bloquant (échec = pas grave) */
+      try {
+        await db.execute({
+          sql: `INSERT INTO page_views (page_id, views, last_viewed_at) VALUES (?, 1, strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+                ON CONFLICT(page_id) DO UPDATE SET views = views + 1, last_viewed_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')`,
+          args: [page.id]
+        });
+      } catch {}
+      const views = Number((await db.execute({
+        sql: 'SELECT views FROM page_views WHERE page_id = ?',
+        args: [page.id]
+      })).rows[0]?.views) || 0;
       const segs = urlPath.split('/').filter(Boolean);
       const crumbs = [{ name: 'INDEXA', url: '/' }];
       segs.forEach((s, i) => {
@@ -216,7 +228,7 @@ ${urls.map(u => `  <url><loc>${BASE_URL}${u}</loc></url>`).join('\n')}
         crumbs.push(isLast ? { name: s.replace(/-/g, ' ').toUpperCase() } : { name: s.replace(/-/g, ' ').toUpperCase(), url: upTo });
       });
       const total = Number((await db.execute('SELECT COUNT(*) c FROM generated_pages')).rows[0].c);
-      return send(res, 200, publicPage({ baseUrl: BASE_URL, page, faq, related, crumbs, total }));
+      return send(res, 200, publicPage({ baseUrl: BASE_URL, page, faq, related, crumbs, total, views }));
     }
 
     /* ----------------------------- 404 ------------------------------ */
