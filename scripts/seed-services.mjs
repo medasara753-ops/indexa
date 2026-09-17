@@ -1,15 +1,17 @@
 /* ------------------------------------------------------------------ */
 /*  Import des datasets réels + génération des pages dans Turso        */
 /*  Usage : node --env-file=.env scripts/seed-services.mjs             */
-/*  Idempotent : un dataset dont le name existe déjà est sauté.        */
+/*  Idempotent : relançable sans doublon — un dataset existant reçoit  */
+/*  seulement ses lignes nouvelles, puis les pages manquantes sont     */
+/*  générées (les URLs déjà prises sont ignorées par le moteur).       */
 /* ------------------------------------------------------------------ */
 import fs from 'node:fs';
-import { getDb, migrate, ensureSeed, prepare, lastId, BASE_URL } from '../lib/db.js';
-import { parseCsv, findVariables, generatePages } from '../lib/engine.js';
+import { getDb, migrate, ensureSeed, prepare, lastId, chunkStmts, BASE_URL } from '../lib/db.js';
+import { parseCsv, generatePages } from '../lib/engine.js';
 
 const db = getDb();
 await migrate(db);
-await ensureSeed(db); // la démo Togo reste si elle existe déjà (pages publiques par défaut)
+await ensureSeed(db); // la démo Togo reste si elle existe (pages publiques par défaut)
 
 const datasets = [
   {
@@ -59,35 +61,63 @@ const datasets = [
 ];
 
 for (const ds of datasets) {
-  const exists = await prepare(db, 'SELECT id FROM datasets WHERE name = ?').get(ds.name);
-  if (exists) {
-    console.log(`— ${ds.name} déjà importé (dataset #${exists.id}), sauté.`);
-    continue;
-  }
-
   const csv = fs.readFileSync(new URL('../' + ds.file, import.meta.url), 'utf8');
   const rows = parseCsv(csv);
   if (!rows.length) { console.error(`!! ${ds.file} : aucune ligne valide`); continue; }
 
-  const ins = await db.execute({ sql: 'INSERT INTO datasets (name, source) VALUES (?, ?)', args: [ds.name, 'csv'] });
-  const datasetId = ins.lastInsertRowid != null ? Number(ins.lastInsertRowid) : await lastId(db);
+  /* ---- dataset : créer ou compléter ------------------------------- */
+  const existing = await prepare(db, 'SELECT id FROM datasets WHERE name = ?').get(ds.name);
+  let datasetId;
+  let addedRows = 0;
 
-  const insRow = 'INSERT INTO data_rows (dataset_id, position, data) VALUES (?, ?, ?)';
-  const stmts = rows.map((row, i) => ({ sql: insRow, args: [datasetId, i, JSON.stringify(row)] }));
-  for (const part of chunk(stmts)) await db.batch(part, 'write');
+  if (existing) {
+    datasetId = Number(existing.id);
+    const have = new Set(
+      (await db.execute({ sql: 'SELECT data FROM data_rows WHERE dataset_id = ?', args: [datasetId] })).rows.map(r => r.data)
+    );
+    const maxPos = Number((await db.execute({
+      sql: 'SELECT COALESCE(MAX(position), -1) AS m FROM data_rows WHERE dataset_id = ?', args: [datasetId]
+    })).rows[0].m);
 
-  const tpl = await db.execute({
-    sql: 'INSERT INTO templates (name, url_pattern, title, meta_description, h1, content) VALUES (?, ?, ?, ?, ?, ?)',
-    args: [ds.template.name, ds.urlPattern, ds.template.title, ds.template.meta, ds.template.h1, ds.template.content]
-  });
-  const templateId = tpl.lastInsertRowid != null ? Number(tpl.lastInsertRowid) : await lastId(db);
+    const fresh = [];
+    rows.forEach((row, i) => {
+      const key = JSON.stringify(row);
+      if (!have.has(key)) { fresh.push({ pos: maxPos + 1 + fresh.length, data: key }); }
+    });
 
+    if (fresh.length) {
+      const ins = 'INSERT INTO data_rows (dataset_id, position, data) VALUES (?, ?, ?)';
+      for (const part of chunkStmts(fresh.map(f => ({ sql: ins, args: [datasetId, f.pos, f.data] })))) {
+        await db.batch(part, 'write');
+      }
+    }
+    addedRows = fresh.length;
+    console.log(`— ${ds.name} : dataset #${datasetId} existant, ${addedRows} nouvelle(s) ligne(s) ajoutée(s)`);
+  } else {
+    const ins = await db.execute({ sql: 'INSERT INTO datasets (name, source) VALUES (?, ?)', args: [ds.name, 'csv'] });
+    datasetId = ins.lastInsertRowid != null ? Number(ins.lastInsertRowid) : await lastId(db);
+    const insRow = 'INSERT INTO data_rows (dataset_id, position, data) VALUES (?, ?, ?)';
+    for (const part of chunkStmts(rows.map((row, i) => ({ sql: insRow, args: [datasetId, i, JSON.stringify(row)] })))) {
+      await db.batch(part, 'write');
+    }
+    addedRows = rows.length;
+    console.log(`— ${ds.name} : dataset #${datasetId} créé, ${addedRows} lignes`);
+  }
+
+  /* ---- template : créer seulement s'il n'existe pas ---------------- */
+  const tpl = await prepare(db, 'SELECT id FROM templates WHERE name = ?').get(ds.template.name);
+  let templateId;
+  if (tpl) {
+    templateId = Number(tpl.id);
+  } else {
+    const t = await db.execute({
+      sql: 'INSERT INTO templates (name, url_pattern, title, meta_description, h1, content) VALUES (?, ?, ?, ?, ?, ?)',
+      args: [ds.template.name, ds.urlPattern, ds.template.title, ds.template.meta, ds.template.h1, ds.template.content]
+    });
+    templateId = t.lastInsertRowid != null ? Number(t.lastInsertRowid) : await lastId(db);
+  }
+
+  /* ---- générer les pages manquantes -------------------------------- */
   const res = await generatePages(db, { datasetId, templateId, limit: 500, baseUrl: BASE_URL });
-  console.log(`— ${ds.name} : ${rows.length} lignes importées, ${res.generated} pages générées (${res.duration_ms} ms)`);
-}
-
-function chunk(stmts, size = 50) {
-  const out = [];
-  for (let i = 0; i < stmts.length; i += size) out.push(stmts.slice(i, i + size));
-  return out;
+  console.log(`   → ${res.generated} page(s) générée(s) (${res.duration_ms} ms)`);
 }
