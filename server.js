@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getDb, ensureSeed, migrate, prepare, lastId, chunkStmts, BASE_URL } from './lib/db.js';
 import { parseCsv, findVariables, generatePages, rebuildLinks, relatedFor } from './lib/engine.js';
-import { landing, generateView, publicPage, notFound } from './lib/views.js';
+import { landing, generateView, publicPage, notFound, pagesIndex } from './lib/views.js';
 import { ogImagePNG } from './lib/ogimage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -193,6 +193,26 @@ ${urls.map(u => `  <url><loc>${BASE_URL}${u}</loc></url>`).join('\n')}
         try { const v = findVariables([JSON.parse(first.data)]); if (v.length) variables = v; } catch {}
       }
       return send(res, 200, generateView({ baseUrl: BASE_URL, datasets, templates, variables, urlPattern: '/{{service-slug}}/{{city-slug}}' }));
+    }
+
+    /* ------------------------- pages index -------------------------- */
+    if (urlPath === '/pages') {
+      const q = decodeURIComponent((req.url || '/').split('?')[1] || '');
+      const term = (q.match(/(?:^|&)q=([^&]*)/) || [])[1] || '';
+      const clean = term.replace(/\+/g, ' ').trim().slice(0, 80);
+      let pages;
+      if (clean) {
+        const like = `%${clean.replace(/[%_]/g, c => '\\' + c)}%`;
+        pages = (await db.execute({
+          sql: `SELECT url, h1 FROM generated_pages
+                WHERE url LIKE ? ESCAPE '\\' OR h1 LIKE ? ESCAPE '\\' OR title LIKE ? ESCAPE '\\'
+                ORDER BY url`,
+          args: [like, like, like]
+        })).rows;
+      } else {
+        pages = (await db.execute('SELECT url, h1 FROM generated_pages ORDER BY url')).rows;
+      }
+      return send(res, 200, pagesIndex({ baseUrl: BASE_URL, pages, q: clean }));
     }
 
     /* --------------------------- landing ---------------------------- */
