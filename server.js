@@ -119,7 +119,7 @@ const server = http.createServer(async (req, res) => {
     /* --------------------------- sitemap ---------------------------- */
     if (urlPath === '/sitemap.xml') {
       const pages = (await db.execute('SELECT url FROM generated_pages ORDER BY id')).rows;
-      const urls = ['/', '/generate', ...pages.map(p => p.url)];
+      const urls = ['/', '/generate', '/pages', ...pages.map(p => p.url)];
       const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls.map(u => `  <url><loc>${BASE_URL}${u}</loc></url>`).join('\n')}
